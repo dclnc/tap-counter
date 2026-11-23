@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tap Counter</title>
+  <meta name="theme-color" content="#111113">
+  <meta name="color-scheme" content="dark">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Tap Counter">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <style>
+    :root {
+      --bg: #111113;
+      --panel: #1c1c22;
+      --panel-online: #22222a;
+      --text: #f3f3f7;
+      --muted: #8b8b96;
+      --reset: #9a9aa3;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    body {
+      min-height: 100dvh;
+      height: 100dvh;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      display: flex;
+      flex-direction: column;
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-right: env(safe-area-inset-right, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      padding-left: env(safe-area-inset-left, 0px);
+      touch-action: manipulation;
+    }
+
+    .panels {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 10px 10px 0;
+      min-height: 0;
+    }
+
+    .panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      border: 0;
+      border-radius: 20px;
+      background: var(--panel);
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-touch-callout: none;
+    }
+
+    .panel[data-key="online"] {
+      background: var(--panel-online);
+    }
+
+    .panel:active {
+      filter: brightness(1.18);
+    }
+
+    .label {
+      font-size: clamp(1.1rem, 4.5vw, 1.6rem);
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      color: var(--muted);
+    }
+
+    .count {
+      font-size: clamp(4.2rem, 22vw, 8rem);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+
+    .reset {
+      flex: 0 0 auto;
+      align-self: center;
+      margin: 4px 0 8px;
+      padding: 10px 16px;
+      border: 0;
+      background: transparent;
+      color: var(--reset);
+      font: inherit;
+      font-size: 0.95rem;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .reset:active {
+      color: var(--text);
+    }
+
+    /* Visually hidden but present so a programmatic click can fire the iOS 18 switch haptic */
+    .ios-haptic {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 1px;
+      height: 1px;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      opacity: 0;
+      pointer-events: none;
+      clip-path: inset(50%);
+    }
+  </style>
+</head>
+<body>
+  <label class="ios-haptic" id="ios-haptic" aria-hidden="true">
+    <input type="checkbox" switch tabindex="-1" id="ios-haptic-input">
+  </label>
+
+  <div class="panels">
+    <button type="button" class="panel" data-key="online" data-freq="1320" aria-label="online">
+      <span class="label">online</span>
+      <span class="count" data-count="online">0</span>
+    </button>
+    <button type="button" class="panel" data-key="ePlusR" data-freq="880" aria-label="E plus R">
+      <span class="label">E plus R</span>
+      <span class="count" data-count="ePlusR">0</span>
+    </button>
+  </div>
+
+  <button type="button" class="reset" id="reset">Reset</button>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = "tap-counter-v1";
+      const defaultState = { online: 0, ePlusR: 0 };
+
+      const ua = navigator.userAgent || "";
+      const appleTouch =
+        /iP(hone|ad|od)/.test(ua) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      const iosMajor = (function () {
+        const match = ua.match(/OS (\d+)[_\s]/);
+        return match ? parseInt(match[1], 10) : null;
+      })();
+      const useSwitchHaptic = appleTouch && (iosMajor === null || iosMajor >= 18);
+      const useVibrate = typeof navigator.vibrate === "function";
+
+      let audioCtx = null;
+
+      function load() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return { ...defaultState };
+          const data = JSON.parse(raw);
+          return {
+            online: Number.isFinite(Number(data.online)) ? Math.max(0, Math.floor(Number(data.online))) : 0,
+            ePlusR: Number.isFinite(Number(data.ePlusR)) ? Math.max(0, Math.floor(Number(data.ePlusR))) : 0
+          };
+        } catch (e) {
+          return { ...defaultState };
+        }
+      }
+
+      function save(state) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (e) {}
+      }
+
+      function render(state) {
+        document.querySelector('[data-count="online"]').textContent = String(state.online);
+        document.querySelector('[data-count="ePlusR"]').textContent = String(state.ePlusR);
+      }
+
+      function ensureAudio() {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        if (!audioCtx) audioCtx = new AC();
+        if (audioCtx.state === "suspended") audioCtx.resume();
+        return audioCtx;
+      }
+
+      function clickSound(freq) {
+        const ctx = ensureAudio();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "square";
+        osc.frequency.setValueAtTime(freq, now);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.05);
+      }
+
+      function haptic() {
+        if (useVibrate) {
+          try { navigator.vibrate(10); } catch (e) {}
+        }
+        if (useSwitchHaptic) {
+          const label = document.getElementById("ios-haptic");
+          if (label) {
+            try {
+              label.click();
+              const input = document.getElementById("ios-haptic-input");
+              if (input) input.blur();
+            } catch (e) {}
+          }
+        }
+      }
+
+      const state = load();
+      render(state);
+
+      document.querySelectorAll(".panel").forEach(function (panel) {
+        panel.addEventListener("click", function () {
+          const key = panel.getAttribute("data-key");
+          const freq = Number(panel.getAttribute("data-freq")) || 1000;
+          state[key] += 1;
+          save(state);
+          render(state);
+          clickSound(freq);
+          haptic();
+        });
+      });
+
+      document.getElementById("reset").addEventListener("click", function () {
+        if (!confirm("Reset both counters to zero?")) return;
+        state.online = 0;
+        state.ePlusR = 0;
+        try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+        render(state);
+      });
+    })();
+  </script>
+</body>
+</html>
