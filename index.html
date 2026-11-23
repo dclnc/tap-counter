@@ -79,7 +79,11 @@
     }
 
     .panel[data-key="online"] {
-      background: var(--panel-online);
+      background: #c62828;
+    }
+
+    .panel[data-key="ePlusR"] {
+      background: #2e7d32;
     }
 
     .panel:active {
@@ -90,7 +94,7 @@
       font-size: clamp(1.1rem, 4.5vw, 1.6rem);
       font-weight: 600;
       letter-spacing: 0.01em;
-      color: var(--muted);
+      color: rgba(255, 255, 255, 0.8);
     }
 
     .count {
@@ -145,8 +149,8 @@
       <span class="label">online</span>
       <span class="count" data-count="online">0</span>
     </button>
-    <button type="button" class="panel" data-key="ePlusR" data-freq="880" aria-label="E plus R">
-      <span class="label">E plus R</span>
+    <button type="button" class="panel" data-key="ePlusR" data-freq="880" aria-label="E&amp;R">
+      <span class="label">E&amp;R</span>
       <span class="count" data-count="ePlusR">0</span>
     </button>
   </div>
